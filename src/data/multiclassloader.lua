@@ -6,7 +6,7 @@ function findClasses(path)
       find = 'gfind'
    end
    local handle = io.popen(find..' '..path..' -mindepth 1 -maxdepth 1 -type d'
-                           ..' | cut -d/ -f11 | sort')
+                           ..' | cut -d/ -f12 | sort')
    local classes = {}
    local class2target = {}
    local key = 1
@@ -16,6 +16,7 @@ function findClasses(path)
       key = key + 1
    end
    handle:close()
+   print(classes)
    return classes, class2target
 end
 
@@ -34,7 +35,7 @@ function findFilenames(path, classes, filename)
    os.execute('rm '..pathfilename)
    for _, class in pairs(classes) do
       os.execute(find..' "'..path..'/'..class..'" '..findOptions
-                 ..' | cut -f11-12 -d/ >> '..pathfilename)
+                 ..' | cut -f12-13 -d/ >> '..pathfilename)
    end
    return pathfilename
 end
