@@ -4,19 +4,19 @@ require 'image'
 require 'os'
 require 'optim'
 require 'src.utils'
+require 'src.data.multiclassloader'
 ffi = require 'ffi'
 unistd = require 'posix.unistd'
 local lsplit    = string.split
 local logtext   = require 'torchnet.log.view.text'
 local logstatus = require 'torchnet.log.view.status'
-local utils     = require 'torchnet-vision.datasets.utils'
 
 local cmd = torch.CmdLine()
 cmd:option('-seed', 1337, 'seed for cpu and gpu')
 cmd:option('-usegpu', true, 'use gpu')
-cmd:option('-bsize', 20, 'batch size')
+cmd:option('-bsize', 40, 'batch size')
 cmd:option('-nepoch', 50, 'epoch number')
-cmd:option('-lr', 1e-4, 'learning rate for adam')
+cmd:option('-lr', 3e-4, 'learning rate for adam')
 cmd:option('-lrd', 0, 'learning rate decay')
 cmd:option('-ftfactor', 10, 'fine tuning factor')
 cmd:option('-nthread', 4, 'threads number for parallel iterator')
@@ -31,9 +31,9 @@ torch.setdefaulttensortype('torch.FloatTensor')
 torch.manualSeed(config.seed)
 
 local path = '/net/big/cadene/doc/Deep6Framework2'
-local pathdata        = path..'/data/raw/upmcfood101/images'
+local pathdata = path..'/data/raw/upmcfood101/images'
 local pathinceptionv3 = path..'models/inceptionv3/net.t7'
-local pathdataset     = path..'data/processed/upmcfood101'
+local pathdataset = path..'data/processed/upmcfood101'
 local pathtrainset = pathdataset..'/trainset.t7'
 local pathtestset  = pathdataset..'/testset.t7'
 os.execute('mkdir -p '..pathdataset)
@@ -47,17 +47,17 @@ local pathconfig    = pathlog..'/config.t7'
 os.execute('mkdir -p '..pathlog)
 torch.save(pathconfig, config)
 
-local trainset, classes, class2target = utils.loadDataset(pathdata..'/train')
-local testset, _, _                   = utils.loadDataset(pathdata..'/test')
+local trainset, classes, class2target = loadDataset(pathdata, 'train')
+local testset, _, _ = loadDataset(pathdata, 'test')
 
-local net = vision.models.inceptionv3.loadFinetuning{
+local net = vision.models.inceptionv3.load{
    filename = pathinceptionv3,
    ftfactor = config.ftfactor,
    nclasses = #classes
 }
 print(net)
-local mean = vision.models.inceptionv3.mean
-local std  = vision.models.inceptionv3.std
+local mean = vision.models.inceptionv3.mean()
+local std  = vision.models.inceptionv3.std()
 local criterion = nn.CrossEntropyCriterion():float()
 
 local function addTransforms(dataset, mean, std)
