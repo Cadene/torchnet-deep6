@@ -9,7 +9,8 @@ unistd = require 'posix.unistd'
 local lsplit    = string.split
 local logtext   = require 'torchnet.log.view.text'
 local logstatus = require 'torchnet.log.view.status'
-local utils     = require 'torchnet-vision.datasets.utils'
+local transformimage = 
+   require 'torchnet-vision.image.transformimage'
 
 local cmd = torch.CmdLine()
 cmd:option('-seed', 1337, 'seed for cpu and gpu')
@@ -31,14 +32,14 @@ torch.setdefaulttensortype('torch.FloatTensor')
 torch.manualSeed(config.seed)
 
 local path = '/net/big/cadene/doc/Deep6Framework2'
-local pathdata        = path..'/data/raw/upmcfood101/images'
-local pathinceptionv3 = path..'/models/inceptionv3/net.t7'
-local pathdataset     = path..'/data/processed/upmcfood101'
+local pathdata    = path..'/data/raw/mit67'
+local pathmodel   = path..'/models/raw/vgg16/net.t7'
+local pathdataset = path..'/data/processed/mit67'
 local pathtrainset = pathdataset..'/trainset.t7'
 local pathtestset  = pathdataset..'/testset.t7'
 os.execute('mkdir -p '..pathdataset)
 
-local pathlog = path..'/logs/upmcfood101/'..config.date
+local pathlog = path..'/logs/mit67/'..config.date
 local pathtrainlog  = pathlog..'/trainlog.txt'
 local pathtestlog   = pathlog..'/testlog.txt'
 local pathbestepoch = pathlog..'/bestepoch.t7'
@@ -47,17 +48,17 @@ local pathconfig    = pathlog..'/config.t7'
 os.execute('mkdir -p '..pathlog)
 torch.save(pathconfig, config)
 
-local trainset, classes, class2target = utils.loadDataset(pathdata..'/train')
-local testset, _, _                   = utils.loadDataset(pathdata..'/test')
+local trainset, testset, classes, class2target
+   = vision.datasets.mit67.load(pathdata)
 
-local net = vision.models.inceptionv3.loadFinetuning{
-   filename = pathinceptionv3,
+local net = vision.models.vgg16.loadFinetuning{
+   filename = pathmodel   ,
    ftfactor = config.ftfactor,
    nclasses = #classes
 }
 print(net)
-local mean = vision.models.inceptionv3.mean
-local std  = vision.models.inceptionv3.std
+local mean = vision.models.vgg16.mean
+local std  = vision.models.vgg16.std
 local criterion = nn.CrossEntropyCriterion():float()
 
 local function addTransforms(dataset, mean, std)
@@ -67,19 +68,20 @@ local function addTransforms(dataset, mean, std)
       sample.target = class2target[sample.label]
       sample.input  = tnt.transform.compose{
          function(path) return image.load(path, 3) end,
-         vision.image.transformimage.randomScale{minSize=299,maxSize=330},
-         vision.image.transformimage.randomCrop(299),
-         vision.image.transformimage.colorNormalize(mean, std)
+         transformimage.randomScale{minSize=221,maxSize=230},
+         transformimage.randomCrop(221),
+         transformimage.moveColor(),
+         transformimage.colorNormalize(mean, std)
       }(sample.path)
       return sample
    end)
    return dataset
 end
 
-trainset = trainset:shuffle()--(300)
+trainset = trainset:shuffle(300)--(300)
 trainset = addTransforms(trainset, mean, std)
 function trainset:manualSeed(seed) torch.manualSeed(seed) end
--- testset  = testset:shuffle(300)
+testset  = testset:shuffle(300)
 testset  = addTransforms(testset, mean, std)
 
 torch.save(pathtrainset, trainset)
