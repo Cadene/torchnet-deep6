@@ -10,16 +10,21 @@ local logtext   = require 'torchnet.log.view.text'
 local logstatus = require 'torchnet.log.view.status'
 local transformimage = 
    require 'torchnet-vision.image.transformimage'
+require 'src.layers.utils'
+require 'src.layers.weldonaggregation'
 
 local cmd = torch.CmdLine()
 cmd:option('-seed', 1337, 'seed for cpu and gpu')
 cmd:option('-usegpu', true, 'use gpu')
-cmd:option('-bsize', 20, 'batch size')
+cmd:option('-bsize', 10, 'batch size')
 cmd:option('-nepoch', 50, 'epoch number')
-cmd:option('-lr', 1e-4, 'learning rate for adam')
+cmd:option('-optim', 'sgd', 'optimzer')
+cmd:option('-lr', 1e-4, 'learning rate')
 cmd:option('-lrd', 0, 'learning rate decay')
-cmd:option('-ftfactor', 10, 'fine tuning factor')
-cmd:option('-nthread', 4, 'threads number for parallel iterator')
+cmd:option('-wd', 0.1, 'weight decay')
+cmd:option('-ftfactor', 0, 'fine tuning factor')
+cmd:option('-nthread', 3, 'threads number for parallel iterator')
+cmd:option('-loadsize', 448, 'loading size of images')
 local config = cmd:parse(arg)
 print(string.format('running on %s', config.usegpu and 'GPU' or 'CPU'))
 
@@ -38,7 +43,7 @@ local pathtrainset = pathdataset..'/trainset.t7'
 local pathtestset  = pathdataset..'/testset.t7'
 os.execute('mkdir -p '..pathdataset)
 
-local pathlog = path..'/logs/mit67/'..config.date
+local pathlog = path..'/logs/mit67weldon/'..config.date
 local pathtrainlog  = pathlog..'/trainlog.txt'
 local pathtestlog   = pathlog..'/testlog.txt'
 local pathbestepoch = pathlog..'/bestepoch.t7'
@@ -55,7 +60,20 @@ local net = vision.models.vgg16.loadFinetuning{
    ftfactor = config.ftfactor,
    nclasses = #classes
 }
+
+local conv1 = linearToConv(net:get(33), 512, 4096, 7, 7)
+-- local conv2 = linearToConv(net:get(36), 4096, 4096, 1, 1)
+-- local conv3 = linearToConv(net:get(40), 4096, 67, 1, 1)
+net:remove(32) -- View
+net:remove(32) -- Linear 33
+net:insert(conv1, 32)
+for i=net:size(), 34, -1 do net:remove() end
+net:add(nn.GradientReversal(-1*config.ftfactor))
+net:add(nn.SpatialConvolution(4096, 67, 1, 1))
+net:add(WeldonAggregation(1,1))
+-- net:add(nn.View(67))
 print(net)
+
 local mean = vision.models.vgg16.mean
 local std  = vision.models.vgg16.std
 local criterion = nn.CrossEntropyCriterion():float()
@@ -67,8 +85,7 @@ local function addTransforms(dataset, mean, std)
       sample.target = class2target[sample.label]
       sample.input  = tnt.transform.compose{
          function(path) return image.load(path, 3) end,
-         transformimage.randomScale{minSize=221,maxSize=230},
-         transformimage.randomCrop(221),
+         function(img) return image.scale(img, config.loadsize, config.loadsize) end,
          transformimage.moveColor(),
          function(img) return img * 255 end,
          transformimage.colorNormalize(mean, std)
@@ -205,10 +222,11 @@ for epoch = 1, config.nepoch do
       network     = net,
       iterator    = trainiter,
       criterion   = criterion,
-      optimMethod = optim.adam,
+      optimMethod = optim[config.optim],
       config      = {
          learningRate      = config.lr,
-         learningRateDecay = config.lrd
+         learningRateDecay = config.lrd,
+         weightDecay       = config.wd
       },
    }
    print('Testing ...')
