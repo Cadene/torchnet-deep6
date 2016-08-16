@@ -193,7 +193,7 @@ local bestepoch = {
 for epoch = 1, config.nepoch do
    print('Training ...')
    engine.mode = 'train'
-   trainiter:exec('resample')
+   trainiter:exec('shuffle')
    engine:train{
       maxepoch    = 1,
       network     = net,
