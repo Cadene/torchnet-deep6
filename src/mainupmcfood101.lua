@@ -17,7 +17,7 @@ cmd:option('-usegpu', true, 'use gpu')
 cmd:option('-bsize', 20, 'batch size')
 cmd:option('-nepoch', 50, 'epoch number')
 cmd:option('-lr', 1e-4, 'learning rate for adam')
-cmd:option('-lrd', 0, 'learning rate decay')
+cmd:option('-lrd', 0.003, 'learning rate decay')
 cmd:option('-ftfactor', 10, 'fine tuning factor')
 cmd:option('-nthread', 4, 'threads number for parallel iterator')
 local config = cmd:parse(arg)
@@ -32,8 +32,8 @@ torch.manualSeed(config.seed)
 
 local path = '/net/big/cadene/doc/Deep6Framework2'
 local pathdata        = path..'/data/raw/upmcfood101/images'
-local pathinceptionv3 = path..'models/inceptionv3/net.t7'
-local pathdataset     = path..'data/processed/upmcfood101'
+local pathinceptionv3 = path..'/models/inceptionv3/net.t7'
+local pathdataset     = path..'/data/processed/upmcfood101'
 local pathtrainset = pathdataset..'/trainset.t7'
 local pathtestset  = pathdataset..'/testset.t7'
 os.execute('mkdir -p '..pathdataset)
@@ -78,6 +78,7 @@ end
 
 trainset = trainset:shuffle()--(300)
 trainset = addTransforms(trainset, mean, std)
+function trainset:manualSeed(seed) torch.manualSeed(seed) end
 -- testset  = testset:shuffle(300)
 testset  = addTransforms(testset, mean, std)
 
@@ -193,6 +194,7 @@ local bestepoch = {
 for epoch = 1, config.nepoch do
    print('Training ...')
    engine.mode = 'train'
+   trainiter:exec('manualSeed', config.seed + epoch)
    trainiter:exec('resample')
    engine:train{
       maxepoch    = 1,
