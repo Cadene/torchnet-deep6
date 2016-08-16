@@ -9,7 +9,7 @@ local lsplit    = string.split
 local logtext   = require 'torchnet.log.view.text'
 local logstatus = require 'torchnet.log.view.status'
 local transformimage = 
-   require 'torchnet-vision.image.transformimage'
+require 'torchnet-vision.image.transformimage'
 require 'src.layers.utils'
 require 'src.layers.weldonaggregation'
 
@@ -180,6 +180,7 @@ engine.hooks.onForwardCriterion = function(state)
       engine.mode, engine.epoch, meter.avgvm:value(), meter.clerr:value{k = 1}))
 end
 engine.hooks.onEnd = function(state)
+   state.network:clearState()
    print('End of epoch '..engine.epoch..' on '..engine.mode..'set')
    log[engine.mode]:flush()
    print('Confusion Matrix (rows = gt, cols = pred)')
@@ -244,6 +245,6 @@ for epoch = 1, config.nepoch do
          confm = meter.confm:value():clone()
       }
       torch.save(pathbestepoch, bestepoch)
-      torch.save(pathbestnet, net:clearState())
+      torch.save(pathbestnet, net)
    end
 end

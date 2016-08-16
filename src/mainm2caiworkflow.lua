@@ -3,13 +3,13 @@ local vision = require 'torchnet-vision'
 require 'image'
 require 'os'
 require 'optim'
-require 'src.utils'
 ffi = require 'ffi'
 unistd = require 'posix.unistd'
 local lsplit    = string.split
 local logtext   = require 'torchnet.log.view.text'
 local logstatus = require 'torchnet.log.view.status'
-local utils     = require 'torchnet-vision.datasets.utils'
+local transformimage = 
+   require 'torchnet-vision.image.transformimage'
 
 local cmd = torch.CmdLine()
 cmd:option('-seed', 1337, 'seed for cpu and gpu')
@@ -17,38 +17,63 @@ cmd:option('-usegpu', true, 'use gpu')
 cmd:option('-bsize', 20, 'batch size')
 cmd:option('-nepoch', 50, 'epoch number')
 cmd:option('-lr', 1e-4, 'learning rate for adam')
-cmd:option('-lrd', 0.003, 'learning rate decay')
+cmd:option('-lrd', 0, 'learning rate decay')
 cmd:option('-ftfactor', 10, 'fine tuning factor')
-cmd:option('-nthread', 4, 'threads number for parallel iterator')
+cmd:option('-nthread', 3, 'threads number for parallel iterator')
 local config = cmd:parse(arg)
 print(string.format('running on %s', config.usegpu and 'GPU' or 'CPU'))
 
 config.idGPU = os.getenv('CUDA_VISIBLE_DEVICES') or -1
-config.pid   = unistd.getpid()
+config.pid   = unilocal tnt = require 'torchnet'
 config.date  = os.date("%y_%m_%d_%X")
 
 torch.setdefaulttensortype('torch.FloatTensor')
 torch.manualSeed(config.seed)
 
 local path = '/net/big/cadene/doc/Deep6Framework2'
-local pathdata        = path..'/data/raw/upmcfood101/images'
+local pathimages   = '/local/robert/m2cai/workflow/images'
+local pathtraintxt = '/local/robert/m2cai/workflow/dataset2/trainset.txt'
+local pathvaltxt   = '/local/robert/m2cai/workflow/dataset2/valset.txt'
 local pathinceptionv3 = path..'/models/inceptionv3/net.t7'
-local pathdataset     = path..'/data/processed/upmcfood101'
+local pathdataset     = path..'/data/processed/m2caiworkflow'
 local pathtrainset = pathdataset..'/trainset.t7'
-local pathtestset  = pathdataset..'/testset.t7'
+local pathvalset  = pathdataset..'/valset.t7'
+local pathclasses  = pathdataset..'/classes.t7'
+local pathclass2target  = pathdataset..'/class2target.t7'
 os.execute('mkdir -p '..pathdataset)
 
-local pathlog = path..'/logs/upmcfood101/'..config.date
+local pathlog = path..'/logs/m2caiworkflow/'..config.date
 local pathtrainlog  = pathlog..'/trainlog.txt'
-local pathtestlog   = pathlog..'/testlog.txt'
+local pathvallog   = pathlog..'/vallog.txt'
 local pathbestepoch = pathlog..'/bestepoch.t7'
 local pathbestnet   = pathlog..'/net.t7'
 local pathconfig    = pathlog..'/config.t7'
 os.execute('mkdir -p '..pathlog)
 torch.save(pathconfig, config)
 
-local trainset, classes, class2target = utils.loadDataset(pathdata..'/train')
-local testset, _, _                   = utils.loadDataset(pathdata..'/test')
+local trainset = tnt.ListDataset{
+    filename = pathtraintxt,
+    path = pathimages,
+    load = function(line)
+       local sample = {line=line}
+       return sample
+    end
+}
+
+local valset = tnt.ListDataset{
+    filename = pathvaltxt,
+    path = pathimages,
+    load = function(line)
+       local sample = {line=line}
+       return sample
+    end
+}
+local classes = {"TrocarPlacement", "Preparation",
+   "CalotTriangleDissection", "ClippingCutting",
+   "GallbladderDissection", "GallbladderPackaging",
+   "CleaningCoagulation", "GallbladderRetraction"}
+local class2target = {}
+for k,v in pairs(classes) do class2target[v] = k end
 
 local net = vision.models.inceptionv3.loadFinetuning{
    filename = pathinceptionv3,
@@ -62,9 +87,10 @@ local criterion = nn.CrossEntropyCriterion():float()
 
 local function addTransforms(dataset, mean, std)
    dataset = dataset:transform(function(sample)
-      local spl = lsplit(sample.path,'/')
-      sample.label  = spl[#spl-1]
-      sample.target = class2target[sample.label]
+      local spl = lsplit(sample.line,', ')
+      sample.path   = spl[1]
+      sample.target = spl[2] + 1
+      sample.label  = classes[spl[2] + 1]
       sample.input  = tnt.transform.compose{
          function(path) return image.load(path, 3) end,
          vision.image.transformimage.randomScale{minSize=299,maxSize=330},
@@ -76,14 +102,14 @@ local function addTransforms(dataset, mean, std)
    return dataset
 end
 
-trainset = trainset:shuffle()--(300)
+trainset = trainset:shuffle()
 trainset = addTransforms(trainset, mean, std)
 function trainset:manualSeed(seed) torch.manualSeed(seed) end
--- testset  = testset:shuffle(300)
-testset  = addTransforms(testset, mean, std)
+-- valset  = valset:shuffle(300)
+valset  = addTransforms(valset, mean, std)
 
 torch.save(pathtrainset, trainset)
-torch.save(pathtestset, testset)
+torch.save(pathvalset, valset)
 
 local function getIterator(mode)
    -- mode = {train,val,test}
@@ -135,11 +161,13 @@ local function createLog(mode, pathlog)
 end
 local log = {
    train = createLog('train', pathtrainlog),
-   test  = createLog('test', pathtestlog)
+   val   = createLog('val', pathvallog)
 }
 
 local engine = tnt.OptimEngine()
-engine.hooks.onStart = function(state) resetMeters(meter) end
+engine.hooks.onStart = function(state)
+   for _,m in pairs(meter) do m:reset() end
+end
 engine.hooks.onStartEpoch = function(state) -- training only
    engine.epoch = engine.epoch and (engine.epoch + 1) or 1
 end
@@ -183,7 +211,7 @@ end
 
 -- Iterator
 local trainiter = getIterator('train')
-local testiter  = getIterator('test')
+local valiter  = getIterator('val')
 
 local bestepoch = {
    clerrtop1 = 100,
@@ -208,10 +236,10 @@ for epoch = 1, config.nepoch do
       },
    }
    print('Testing ...')
-   engine.mode = 'test'
+   engine.mode = 'val'
    engine:test{
       network   = net,
-      iterator  = testiter,
+      iterator  = valiter,
       criterion = criterion,
    }
    if bestepoch.clerrtop1 > meter.clerr:value{k = 1} then
