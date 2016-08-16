@@ -78,6 +78,7 @@ end
 
 trainset = trainset:shuffle()--(300)
 trainset = addTransforms(trainset, mean, std)
+function trainset:manualSeed(seed) torch.manualSeed(seed) end
 -- testset  = testset:shuffle(300)
 testset  = addTransforms(testset, mean, std)
 
@@ -193,7 +194,8 @@ local bestepoch = {
 for epoch = 1, config.nepoch do
    print('Training ...')
    engine.mode = 'train'
-   trainiter:exec('shuffle')
+   trainiter:exec('manualSeed', config.seed + epoch)
+   trainiter:exec('resample')
    engine:train{
       maxepoch    = 1,
       network     = net,
