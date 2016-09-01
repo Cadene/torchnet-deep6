@@ -8,7 +8,7 @@ unistd = require 'posix.unistd'
 local lsplit    = string.split
 local logtext   = require 'torchnet.log.view.text'
 local logstatus = require 'torchnet.log.view.status'
-local transformimage = 
+local transformimage =
    require 'torchnet-vision.image.transformimage'
 
 local cmd = torch.CmdLine()
@@ -19,7 +19,7 @@ cmd:option('-nepoch', 50, 'epoch number')
 cmd:option('-lr', 1e-4, 'learning rate for adam')
 cmd:option('-lrd', 0, 'learning rate decay')
 cmd:option('-ftfactor', 10, 'fine tuning factor')
-cmd:option('-nthread', 4, 'threads number for parallel iterator')
+cmd:option('-nthread', 3, 'threads number for parallel iterator')
 local config = cmd:parse(arg)
 print(string.format('running on %s', config.usegpu and 'GPU' or 'CPU'))
 

@@ -3,13 +3,13 @@ local vision = require 'torchnet-vision'
 require 'image'
 require 'os'
 require 'optim'
-require 'src.utils'
 ffi = require 'ffi'
 unistd = require 'posix.unistd'
 local lsplit    = string.split
 local logtext   = require 'torchnet.log.view.text'
 local logstatus = require 'torchnet.log.view.status'
 local utils     = require 'torchnet-vision.datasets.utils'
+local mutils    = require 'src.models.utils'
 
 local cmd = torch.CmdLine()
 cmd:option('-seed', 1337, 'seed for cpu and gpu')
@@ -20,6 +20,8 @@ cmd:option('-lr', 1e-4, 'learning rate for adam')
 cmd:option('-lrd', 0.003, 'learning rate decay')
 cmd:option('-ftfactor', 10, 'fine tuning factor')
 cmd:option('-nthread', 4, 'threads number for parallel iterator')
+cmd:option('-fixbn', true, 'fix batch normalization during training')
+cmd:option('-fixbnip', false, 'arg ip')
 local config = cmd:parse(arg)
 print(string.format('running on %s', config.usegpu and 'GPU' or 'CPU'))
 
@@ -32,7 +34,7 @@ torch.manualSeed(config.seed)
 
 local path = '/net/big/cadene/doc/Deep6Framework2'
 local pathdata        = path..'/data/raw/upmcfood101/images'
-local pathinceptionv3 = path..'/models/inceptionv3/net.t7'
+local pathinceptionv3 = path..'/models/raw/inceptionv3/net.t7'
 local pathdataset     = path..'/data/processed/upmcfood101'
 local pathtrainset = pathdataset..'/trainset.t7'
 local pathtestset  = pathdataset..'/testset.t7'
@@ -55,6 +57,7 @@ local net = vision.models.inceptionv3.loadFinetuning{
    ftfactor = config.ftfactor,
    nclasses = #classes
 }
+if config.fixbn then mutils.BNtoFixed(net, config.fixbnip) end
 print(net)
 local mean = vision.models.inceptionv3.mean
 local std  = vision.models.inceptionv3.std
@@ -139,7 +142,9 @@ local log = {
 }
 
 local engine = tnt.OptimEngine()
-engine.hooks.onStart = function(state) resetMeters(meter) end
+engine.hooks.onStart = function(state)
+   for _, m in pairs(meter) do m:reset() end
+end
 engine.hooks.onStartEpoch = function(state) -- training only
    engine.epoch = engine.epoch and (engine.epoch + 1) or 1
 end

@@ -3,110 +3,89 @@ local vision = require 'torchnet-vision'
 require 'image'
 require 'os'
 require 'optim'
+require 'src.utils'
 ffi = require 'ffi'
 unistd = require 'posix.unistd'
 local lsplit    = string.split
 local logtext   = require 'torchnet.log.view.text'
 local logstatus = require 'torchnet.log.view.status'
-local transformimage = require 'torchnet-vision.image.transformimage'
-local utils         = require 'src.data.utils'
-local m2caiworkflow = require 'src.data.m2caiworkflow'
+local utils     = require 'torchnet-vision.datasets.utils'
 
 local cmd = torch.CmdLine()
 cmd:option('-seed', 1337, 'seed for cpu and gpu')
 cmd:option('-usegpu', true, 'use gpu')
-cmd:option('-bsize', 35, 'batch size')
+cmd:option('-bsize', 25, 'batch size')
 cmd:option('-nepoch', 50, 'epoch number')
-cmd:option('-lr', 1e-4, 'learning rate for adam')
+cmd:option('-lr', 0.0003, 'learning rate for adam')
 cmd:option('-lrd', 0, 'learning rate decay')
-cmd:option('-ftfactor', 0, 'fine tuning factor')
-cmd:option('-fromscratch', false, 'if true reset net and set ftfactor to 1')
+cmd:option('-ftfactor', 10, 'fine tuning factor')
 cmd:option('-nthread', 3, 'threads number for parallel iterator')
 local config = cmd:parse(arg)
 print(string.format('running on %s', config.usegpu and 'GPU' or 'CPU'))
 
 config.idGPU = os.getenv('CUDA_VISIBLE_DEVICES') or -1
-config.pid   = unilocal tnt = require 'torchnet'
+config.pid   = unistd.getpid()
 config.date  = os.date("%y_%m_%d_%X")
 
 torch.setdefaulttensortype('torch.FloatTensor')
 torch.manualSeed(config.seed)
 
-local path = '/net/big/cadene/doc/Deep6Framework2'
-local pathinceptionv3 = path..'/models/raw/inceptionv3/net.t7'
-local pathdataset     = path..'/data/processed/m2caiworkflow'
+local path = '.'
+local pathdata     = '../../public/upmcfood101_224'
+local pathvggm     = path..'/models/raw/vggm/net.t7'
+local pathdataset  = path..'/data/processed/upmcfood101'
 local pathtrainset = pathdataset..'/trainset.t7'
-local pathvalset  = pathdataset..'/valset.t7'
-local pathclasses  = pathdataset..'/classes.t7'
-local pathmean     = pathdataset..'/mean.t7'
-local pathstd      = pathdataset..'/std.t7'
-local pathclass2target  = pathdataset..'/class2target.t7'
+local pathtestset  = pathdataset..'/testset.t7'
+os.execute('mkdir -p '..pathdataset)
 
-local pathlog = path..'/logs/m2caiworkflow/'..config.date
+local pathlog = path..'/logs/upmcfood101marion/'..config.date
 local pathtrainlog  = pathlog..'/trainlog.txt'
-local pathvallog   = pathlog..'/vallog.txt'
+local pathtestlog   = pathlog..'/testlog.txt'
 local pathbestepoch = pathlog..'/bestepoch.t7'
 local pathbestnet   = pathlog..'/net.t7'
 local pathconfig    = pathlog..'/config.t7'
+os.execute('mkdir -p '..pathlog)
+torch.save(pathconfig, config)
 
-local trainset, valset, classes, class2target = m2caiworkflow.load()
+local trainset, classes, class2target = utils.loadDataset(pathdata..'/train')
+local testset, _, _                   = utils.loadDataset(pathdata..'/test')
 
-if config.fromscratch then config.ftfactor = 1 end
-local net = vision.models.inceptionv3.loadFinetuning{
-   filename = pathinceptionv3,
+local net = vision.models.vggm.loadFinetuning{
+   filename = pathvggm,
    ftfactor = config.ftfactor,
    nclasses = #classes
 }
 print(net)
+local mean = vision.models.inceptionv3.mean
+local std  = vision.models.inceptionv3.std
 local criterion = nn.CrossEntropyCriterion():float()
-
-local mean, std
 
 local function addTransforms(dataset, mean, std)
    dataset = dataset:transform(function(sample)
-      local spl = lsplit(sample.line,', ')
-      sample.path   = spl[1]
-      sample.target = spl[2] + 1
-      sample.label  = classes[spl[2] + 1]
+      local spl = lsplit(sample.path,'/')
+      sample.label  = spl[#spl-1]
+      sample.target = class2target[sample.label]
       sample.input  = tnt.transform.compose{
          function(path) return image.load(path, 3) end,
-         vision.image.transformimage.randomScale{minSize=299,maxSize=330},
-         vision.image.transformimage.randomCrop(299),
-         vision.image.transformimage.colorNormalize(mean, std) -- mean not set
+         vision.image.transformimage.randomScale{minSize=221,maxSize=230},
+         vision.image.transformimage.randomCrop(221),
+         vision.image.transformimage.moveColor(),
+         function(img) return img * 255 end,
+         vision.image.transformimage.colorNormalize(mean, std)
       }(sample.path)
       return sample
    end)
    return dataset
 end
 
-trainset = trainset:shuffle()
+trainset = trainset:shuffle()--(300)
 trainset = addTransforms(trainset, mean, std)
 function trainset:manualSeed(seed) torch.manualSeed(seed) end
--- valset  = valset:shuffle(300)
-valset  = addTransforms(valset, mean, std)
+-- testset  = testset:shuffle(300)
+testset  = addTransforms(testset, mean, std)
 
-if config.fromscratch then
-   net:reset()
-   if paths.filep(pathmean) and paths.filep(pathstd) then
-      mean = torch.load(pathmean)
-      std  = torch.load(pathstd)
-   else
-      mean = torch.zeros(3,299,299)
-      std = torch.zeros(3,299,299)
-      mean, std = utils.processMeanStd(trainset, .1, mean, std)
-      torch.save(pathmean, mean)
-      torch.save(pathstd, std)
-   end
-else
-   mean = vision.models.inceptionv3.mean
-   std  = vision.models.inceptionv3.std
-end
-
-os.execute('mkdir -p '..pathlog)
-os.execute('mkdir -p '..pathdataset)
-torch.save(pathconfig, config)
 torch.save(pathtrainset, trainset)
-torch.save(pathvalset, valset)
+torch.save(pathtestset, testset)
 
 local function getIterator(mode)
    -- mode = {train,val,test}
@@ -158,13 +137,11 @@ local function createLog(mode, pathlog)
 end
 local log = {
    train = createLog('train', pathtrainlog),
-   val   = createLog('val', pathvallog)
+   test  = createLog('test', pathtestlog)
 }
 
 local engine = tnt.OptimEngine()
-engine.hooks.onStart = function(state)
-   for _,m in pairs(meter) do m:reset() end
-end
+engine.hooks.onStart = function(state) resetMeters(meter) end
 engine.hooks.onStartEpoch = function(state) -- training only
    engine.epoch = engine.epoch and (engine.epoch + 1) or 1
 end
@@ -208,7 +185,7 @@ end
 
 -- Iterator
 local trainiter = getIterator('train')
-local valiter  = getIterator('val')
+local testiter  = getIterator('test')
 
 local bestepoch = {
    clerrtop1 = 100,
@@ -233,10 +210,10 @@ for epoch = 1, config.nepoch do
       },
    }
    print('Testing ...')
-   engine.mode = 'val'
+   engine.mode = 'test'
    engine:test{
       network   = net,
-      iterator  = valiter,
+      iterator  = testiter,
       criterion = criterion,
    }
    if bestepoch.clerrtop1 > meter.clerr:value{k = 1} then

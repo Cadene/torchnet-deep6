@@ -3,23 +3,24 @@ local vision = require 'torchnet-vision'
 require 'image'
 require 'os'
 require 'optim'
-require 'src.utils'
-require 'src.data.multiclassloader'
 ffi = require 'ffi'
 unistd = require 'posix.unistd'
 local lsplit    = string.split
 local logtext   = require 'torchnet.log.view.text'
 local logstatus = require 'torchnet.log.view.status'
+local utils     = require 'src.data.utils'
+local dsgqualif = require 'src.data.dsgqualif'
 
 local cmd = torch.CmdLine()
 cmd:option('-seed', 1337, 'seed for cpu and gpu')
 cmd:option('-usegpu', true, 'use gpu')
-cmd:option('-bsize', 40, 'batch size')
+cmd:option('-bsize', 17, 'batch size')
 cmd:option('-nepoch', 50, 'epoch number')
-cmd:option('-lr', 3e-4, 'learning rate for adam')
+cmd:option('-lr', 1e-3, 'learning rate for adam')
 cmd:option('-lrd', 0, 'learning rate decay')
-cmd:option('-ftfactor', 10, 'fine tuning factor')
-cmd:option('-nthread', 4, 'threads number for parallel iterator')
+cmd:option('-ftfactor', 1, 'fine tuning factor')
+cmd:option('-fromscratch', true, 'reset net')
+cmd:option('-nthread', 3, 'threads number for parallel iterator')
 local config = cmd:parse(arg)
 print(string.format('running on %s', config.usegpu and 'GPU' or 'CPU'))
 
@@ -31,15 +32,16 @@ torch.setdefaulttensortype('torch.FloatTensor')
 torch.manualSeed(config.seed)
 
 local path = '/net/big/cadene/doc/Deep6Framework2'
-local pathdata = path..'/data/raw/upmcfood101/images'
-local pathinceptionv3 = path..'models/inceptionv3/net.t7'
-local pathdataset = path..'data/processed/upmcfood101'
+local pathmodel = path..'/models/raw/inceptionv3/net.t7'
+local pathdataset = path..'/data/processed/dsgqualif'
 local pathtrainset = pathdataset..'/trainset.t7'
 local pathtestset  = pathdataset..'/testset.t7'
+local pathvalset   = pathdataset..'/valset.t7'
 os.execute('mkdir -p '..pathdataset)
 
-local pathlog = path..'/logs/upmcfood101/'..config.date
+local pathlog = path..'/logs/dsgqualif/'..config.date
 local pathtrainlog  = pathlog..'/trainlog.txt'
+local pathvallog    = pathlog..'/vallog.txt'
 local pathtestlog   = pathlog..'/testlog.txt'
 local pathbestepoch = pathlog..'/bestepoch.t7'
 local pathbestnet   = pathlog..'/net.t7'
@@ -47,29 +49,35 @@ local pathconfig    = pathlog..'/config.t7'
 os.execute('mkdir -p '..pathlog)
 torch.save(pathconfig, config)
 
-local trainset, classes, class2target = loadDataset(pathdata, 'train')
-local testset, _, _ = loadDataset(pathdata, 'test')
+local trainset, valset, testset, classes, class2target = dsgqualif.load()
 
-local net = vision.models.inceptionv3.load{
-   filename = pathinceptionv3,
+local net = vision.models.inceptionv3.loadFinetuning{
+   filename = pathmodel,
    ftfactor = config.ftfactor,
    nclasses = #classes
 }
-print(net)
-local mean = vision.models.inceptionv3.mean()
-local std  = vision.models.inceptionv3.std()
 local criterion = nn.CrossEntropyCriterion():float()
+if config.fromscratch then
+   print('Reset network', net:reset())
+end
+print(net)
 
-local function addTransforms(dataset, mean, std)
+local function addTransforms(dataset)
    dataset = dataset:transform(function(sample)
       local spl = lsplit(sample.path,'/')
       sample.label  = spl[#spl-1]
       sample.target = class2target[sample.label]
       sample.input  = tnt.transform.compose{
          function(path) return image.load(path, 3) end,
-         vision.image.transformimage.randomScale{minSize=299,maxSize=330},
+         vision.image.transformimage.randomScale{minSize=299,maxSize=310},
          vision.image.transformimage.randomCrop(299),
-         vision.image.transformimage.colorNormalize(mean, std)
+         vision.image.transformimage.horizontalFlip(),
+         vision.image.transformimage.verticalFlip(),
+         vision.image.transformimage.rotation(0.1),
+         vision.image.transformimage.colorNormalize{
+            mean = vision.models.inceptionv3.mean,
+            std  = vision.models.inceptionv3.std
+         }
       }(sample.path)
       return sample
    end)
@@ -77,13 +85,15 @@ local function addTransforms(dataset, mean, std)
 end
 
 trainset = trainset:shuffle()--(300)
-trainset = addTransforms(trainset, mean, std)
-function trainset:manualSeed(seed) torch.manualSeed(seed) end
+-- valset   = valset:shuffle(300)
 -- testset  = testset:shuffle(300)
-testset  = addTransforms(testset, mean, std)
-
+trainset = addTransforms(trainset)
+valset   = addTransforms(valset)
+-- testset  = addTransforms(testset)
+function trainset:manualSeed(seed) torch.manualSeed(seed) end
 torch.save(pathtrainset, trainset)
-torch.save(pathtestset, testset)
+torch.save(pathvalset, valset)
+-- torch.save(pathtestset, testset)
 
 local function getIterator(mode)
    -- mode = {train,val,test}
@@ -113,12 +123,12 @@ local meter = {
    avgvm = tnt.AverageValueMeter(),
    confm = tnt.ConfusionMeter{k=#classes},
    timem = tnt.TimeMeter{unit = false},
-   clerr = tnt.ClassErrorMeter{topk = {1,5}}
+   clerr = tnt.ClassErrorMeter{topk = {1}}
 }
 
 local function createLog(mode, pathlog)
-   local keys = {'epoch', 'loss', 'acc1', 'acc5', 'time'}
-   local format = {'%d', '%10.5f', '%3.2f', '%3.2f', '%.1f'}
+   local keys = {'epoch', 'loss', 'acc1', 'time'}
+   local format = {'%d', '%10.5f', '%3.2f', '%.1f'}
    local log = tnt.Log{
       keys = keys,
       onFlush = {
@@ -135,11 +145,14 @@ local function createLog(mode, pathlog)
 end
 local log = {
    train = createLog('train', pathtrainlog),
-   test  = createLog('test', pathtestlog)
+   val   = createLog('val', pathvallog),
+   -- test  = createLog('test', pathtestlog)
 }
 
 local engine = tnt.OptimEngine()
-engine.hooks.onStart = function(state) resetMeters(meter) end
+engine.hooks.onStart = function(state)
+   for _, m in pairs(meter) do m:reset() end
+end
 engine.hooks.onStartEpoch = function(state) -- training only
    engine.epoch = engine.epoch and (engine.epoch + 1) or 1
 end
@@ -152,7 +165,6 @@ engine.hooks.onForwardCriterion = function(state)
       epoch = engine.epoch,
       loss  = meter.avgvm:value(),
       acc1  = 100 - meter.clerr:value{k = 1},
-      acc5  = 100 - meter.clerr:value{k = 5},
       time  = meter.timem:value()
    }
    print(string.format('%s epoch: %i; avg. loss: %2.4f; avg. error: %2.4f',
@@ -183,7 +195,8 @@ end
 
 -- Iterator
 local trainiter = getIterator('train')
-local testiter  = getIterator('test')
+local valiter   = getIterator('val')
+-- local testiter  = getIterator('test')
 
 local bestepoch = {
    clerrtop1 = 100,
@@ -207,17 +220,16 @@ for epoch = 1, config.nepoch do
          learningRateDecay = config.lrd
       },
    }
-   print('Testing ...')
-   engine.mode = 'test'
+   print('Validating ...')
+   engine.mode = 'val'
    engine:test{
       network   = net,
-      iterator  = testiter,
+      iterator  = valiter,
       criterion = criterion,
    }
    if bestepoch.clerrtop1 > meter.clerr:value{k = 1} then
       bestepoch = {
          clerrtop1 = meter.clerr:value{k = 1},
-         clerrtop5 = meter.clerr:value{k = 5},
          epoch = epoch,
          confm = meter.confm:value():clone()
       }

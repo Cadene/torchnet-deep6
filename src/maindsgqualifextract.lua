@@ -9,16 +9,16 @@ local lsplit    = string.split
 local logtext   = require 'torchnet.log.view.text'
 local logstatus = require 'torchnet.log.view.status'
 local utils     = require 'src.data.utils'
-local m2caiworkflow = require 'src.data.m2caiworkflow'
+local dsgqualif = require 'src.data.dsgqualif'
 
 local cmd = torch.CmdLine()
 cmd:option('-seed', 1337, 'seed for cpu and gpu')
 cmd:option('-usegpu', true, 'use gpu')
-cmd:option('-bsize', 15, 'batch size')
+cmd:option('-bsize', 17, 'batch size')
 cmd:option('-nthread', 3, 'threads number for parallel iterator')
-cmd:option('-pathfeats', 'features/m2caiworkflow/'..os.date("%y_%m_%d_%X"), '')
-cmd:option('-hflip', 0, 'proba horizontal flip')
-cmd:option('-vflip', 0, 'proba vertical flip')
+cmd:option('-pathfeats', 'features/dsgqualif/'..os.date("%y_%m_%d_%X"), '')
+cmd:option('-hflip', 0.5, 'proba horizontal flip')
+cmd:option('-vflip', 0.5, 'proba vertical flip')
 cmd:option('-model', 'inceptionv3', 'or vgg16')
 cmd:option('-layerid', 30, 'vgg16:33,34,36,37')
 cmd:option('-nfeats', 2048, 'features number (or vgg16:4096)')
@@ -33,14 +33,16 @@ torch.manualSeed(config.seed)
 
 local path = '.'
 local pathmodel = path..'/models/raw/'..config.model..'/net.t7'
-local pathdataset = path..'/data/processed/m2caiworkflow'
+local pathdataset = path..'/data/processed/dsgqualif'
 local pathtrainset = pathdataset..'/trainset.t7'
+local pathtestset  = pathdataset..'/testset.t7'
 local pathvalset   = pathdataset..'/valset.t7'
 local pathclasses  = pathdataset..'/classes.t7'
 local pathclass2target = pathdataset..'/class2target.t7'
 os.execute('mkdir -p '..pathdataset)
 
-local trainset, valset, classes, class2target = m2caiworkflow.load()
+local trainset, valset, testset, classes, class2target
+   = dsgqualif.load{dirname='../Deep6Framework/data/interim/DSG_qualif'}
 
 local model = vision.models[config.model]
 local net = model.loadExtracting{
@@ -54,12 +56,11 @@ local pathconfig = pathfeats..'/config.t7'
 os.execute('mkdir -p '..pathfeats)
 torch.save(pathconfig, config)
 
-local function addTransforms(dataset, model)
+local function addTransforms(dataset)
    dataset = dataset:transform(function(sample)
-      local spl = lsplit(sample.line,', ')
-      sample.path   = spl[1]
-      sample.target = spl[2] + 1
-      sample.label  = classes[spl[2] + 1]
+      local spl = lsplit(sample.path,'/')
+      sample.label  = spl[#spl-1]
+      sample.target = class2target[sample.label]
       sample.input  = tnt.transform.compose{
          function(path) return image.load(path, 3) end,
          vision.image.transformimage.randomScale{
@@ -67,9 +68,9 @@ local function addTransforms(dataset, model)
             maxSize=model.inputSize[2]+11
          },
          vision.image.transformimage.randomCrop(model.inputSize[2]),
-         -- vision.image.transformimage.horizontalFlip(config.hflip),
-         -- vision.image.transformimage.verticalFlip(config.vflip),
-         -- vision.image.transformimage.rotation(0),
+         vision.image.transformimage.horizontalFlip(config.hflip),
+         vision.image.transformimage.verticalFlip(config.vflip),
+         vision.image.transformimage.rotation(0.1),
          vision.image.transformimage.colorNormalize{
             mean = model.mean,
             std  = model.std
@@ -82,11 +83,14 @@ end
 
 -- trainset = trainset:shuffle(300)--(300)
 -- valset   = valset:shuffle(300)
-trainset = addTransforms(trainset, model)
-valset   = addTransforms(valset, model)
+-- testset  = testset:shuffle(300)
+trainset = addTransforms(trainset)
+valset   = addTransforms(valset)
+testset  = addTransforms(testset)
 function trainset:manualSeed(seed) torch.manualSeed(seed) end
 torch.save(pathtrainset, trainset)
 torch.save(pathvalset, valset)
+torch.save(pathtestset, testset)
 torch.save(pathclasses, classes)
 torch.save(pathclass2target, class2target)
 
@@ -163,12 +167,12 @@ if config.usegpu then
    end  -- alternatively, this logic can be implemented via a TransformDataset
 end
 
-print('Training ...')
-engine.mode = 'train'
-engine:test{
-   network  = net,
-   iterator = getIterator('train')
-}
+-- print('Training ...')
+-- engine.mode = 'train'
+-- engine:test{
+--    network  = net,
+--    iterator = getIterator('train')
+-- }
 print('Validating ...')
 engine.mode = 'val'
 engine:test{

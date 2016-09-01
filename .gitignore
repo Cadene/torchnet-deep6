@@ -9,6 +9,8 @@ data/interim/*
 # Exclude models
 models/raw/*
 models/processed/*
+# Exclude features
+features/*
 # Exclude logs
 logs/*
 !.gitkeep

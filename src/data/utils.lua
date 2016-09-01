@@ -1,6 +1,8 @@
+local utils = {}
 
-function iterOverDataset(dataset, maxiter, hook)
-   for sample in dataset:iterator()() do
+utils.iterOverDataset = function(dataset, maxiter, hook)
+   local i = 1
+   for sample in dataset:shuffle():iterator()() do
       if hook.onSample then hook.onSample(sample) end
       xlua.progress(i, maxiter)
       i = i + 1
@@ -9,19 +11,22 @@ function iterOverDataset(dataset, maxiter, hook)
    if hook.onEnd then hook.onEnd() end
 end
 
-function processMeanStd(dataset, pc, mean, std)
+utils.processMeanStd = function(dataset, pc, mean, std)
    require 'xlua'
-   local i = 0
    local maxiter = torch.round(dataset:size() * pc)
    print('Process mean')
-   iterOverDataset(dataset, maxiter, {
+   utils.iterOverDataset(dataset, maxiter, {
       onSample = function(sample) mean:add(sample.input) end,
       onEnd = function() mean:div(maxiter) end
    })
+   print('')
    print('Process std')
-   iterOverDataset(dataset, maxiter, {
+   utils.iterOverDataset(dataset, maxiter, {
       onSample = function(sample) std:add((sample.input - mean):pow(2)) end,
       onEnd = function() std:div(maxiter) end
    })
+   print('')
    return mean, std
 end
+
+return utils
