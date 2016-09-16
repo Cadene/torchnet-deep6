@@ -4,7 +4,7 @@ Tableau de résultats pour logs/m2caiworkflow/resnet
 
 | lr | lrd | bsize | epoch | acctop1 |
 |----|-----|-------|-------|---------|
-| 0.001 | 0 | 15 | 1 | 19.995038451997 |	
+| 0.001 | 0 | 15 | 1 | 19.995038451997 |
 | 0.0005 | 0 | 15 | 2 | 65.901761349541 |
 | 0.0001 | 0 | 15 | 2 | 67.204167700323 |
 | 5e-05 | 0 | 15 | 2 | 71.706772513024 |
@@ -195,12 +195,16 @@ Tableau de résultats pour logs/m2caiworkflow/finetuning_partfold_3
 | lr | lrd | bsize | epoch | acctop1 |
 |----|-----|-------|-------|---------|
 | 0.0001 | 0.04 | 19 | 5 | 67.69332452082 |
+| 0.0001 | 0.1 | 19 | 14 | 67.732980832783 |
 | 0.0001 | 0.01 | 19 | 4 | 67.97091870456 |
+| 0.0001 | 0.08 | 19 | 7 | 68.856576338401 |
 
 Dans le même ordre qu'au dessus :
 
 - logs/m2caiworkflow/finetuning_partfold_3/16_09_15_23:24:19/net.t7
+- logs/m2caiworkflow/finetuning_partfold_3/16_09_15_23:24:28/net.t7
 - logs/m2caiworkflow/finetuning_partfold_3/16_09_15_23:25:05/net.t7
+- logs/m2caiworkflow/finetuning_partfold_3/16_09_15_23:24:49/net.t7
 
 # InceptionV3 Fold4
 
@@ -213,10 +217,14 @@ Tableau de résultats pour logs/m2caiworkflow/finetuning_partfold_4
 | lr | lrd | bsize | epoch | acctop1 |
 |----|-----|-------|-------|---------|
 | 0.0001 | 0.1 | 19 | 5 | 73.802242609582 |
+| 0.0001 | 0.05 | 19 | 5 | 73.942405708461 |
+| 0.0001 | 0.05 | 19 | 3 | 74.490316004077 |
 
 Dans le même ordre qu'au dessus :
 
 - logs/m2caiworkflow/finetuning_partfold_4/16_09_16_10:37:56/net.t7
+- logs/m2caiworkflow/finetuning_partfold_4/16_09_16_10:37:36/net.t7
+- logs/m2caiworkflow/finetuning_partfold_4/16_09_16_10:38:19/net.t7
 
 # InceptionV3 Fold5
 
