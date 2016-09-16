@@ -1,70 +1,69 @@
-local tnt = require 'torchnet'
-local vision = require 'torchnet-vision'
 require 'image'
 require 'os'
 require 'optim'
-ffi = require 'ffi'
+require 'nn'
+require 'src.layers.weldonaggregation'
+ffi    = require 'ffi'
 unistd = require 'posix.unistd'
-local lsplit    = string.split
-local logtext   = require 'torchnet.log.view.text'
-local logstatus = require 'torchnet.log.view.status'
+local tnt            = require 'torchnet'
+local vision         = require 'torchnet-vision'
+local logtext        = require 'torchnet.log.view.text'
+local logstatus      = require 'torchnet.log.view.status'
 local transformimage = require 'torchnet-vision.image.transformimage'
-local utils         = require 'src.data.utils'
-local m2caiworkflow = require 'src.data.m2caiworkflow'
+local model          = require 'torchnet-vision.models.inceptionv3'
+local utils          = require 'src.data.utils'
+local m2caiworkflow  = require 'src.data.m2caiworkflow'
+local lsplit = string.split
 
 local cmd = torch.CmdLine()
--- options to get acctop1=79.06 in 9 epoch
 cmd:option('-seed', 1337, 'seed for cpu and gpu')
 cmd:option('-usegpu', true, 'use gpu')
-cmd:option('-bsize', 19, 'batch size')
-cmd:option('-nepoch', 20, 'epoch number')
+cmd:option('-bsize', 18, 'batch size')
+cmd:option('-nepoch', 50, 'epoch number')
 cmd:option('-lr', 1e-4, 'learning rate for adam')
 cmd:option('-lrd', 0, 'learning rate decay')
 cmd:option('-ftfactor', 10, 'fine tuning factor')
-cmd:option('-fromscratch', false, 'if true reset net and set ftfactor to 1')
 cmd:option('-nthread', 3, 'threads number for parallel iterator')
-cmd:option('-part', '6b', 'data part split')
+cmd:option('-loadsize', 448, 'loading size of images')
+cmd:option('-k', 3, 'k min max aggregation (weldon)')
 local config = cmd:parse(arg)
 print(string.format('running on %s', config.usegpu and 'GPU' or 'CPU'))
 
 config.idGPU = os.getenv('CUDA_VISIBLE_DEVICES') or -1
-config.pid   = unistd.getpid()
+config.pid   = unilocal tnt = require 'torchnet'
 config.date  = os.date("%y_%m_%d_%X")
 
 torch.setdefaulttensortype('torch.FloatTensor')
 torch.manualSeed(config.seed)
 
 local path = '/net/big/cadene/doc/Deep6Framework2'
-local pathinceptionv3 = path..'/models/raw/inceptionv3/net.t7'
-local pathdataset     = path..'/data/processed/m2caiworkflow'
-local pathtrainset = pathdataset..'/trainset.t7'
-local pathvalset  = pathdataset..'/valset.t7'
-local pathclasses  = pathdataset..'/classes.t7'
-local pathmean     = pathdataset..'/mean.t7'
-local pathstd      = pathdataset..'/std.t7'
-local pathclass2target  = pathdataset..'/class2target.t7'
-
-local pathlog = path..'/logs/m2caiworkflow/finetuning_part'..config.part..'/'..config.date
+local pathdataset = path..'/data/processed/m2caiworkflow'
+local pathmodel   = path..'/models/raw/inceptionv3/net.t7'
+local pathlog     = path..'/logs/m2caiworkflow/inceptionv3weldon/'..config.date
+local pathtrainset     = pathdataset..'/trainset.t7'
+local pathvalset       = pathdataset..'/valset.t7'
+local pathclasses      = pathdataset..'/classes.t7'
+local pathclass2target = pathdataset..'/class2target.t7'
 local pathtrainlog  = pathlog..'/trainlog.txt'
-local pathvallog   = pathlog..'/vallog.txt'
+local pathvallog    = pathlog..'/vallog.txt'
 local pathbestepoch = pathlog..'/bestepoch.t7'
 local pathbestnet   = pathlog..'/net.t7'
 local pathconfig    = pathlog..'/config.t7'
 
-local trainset, valset, classes, class2target = m2caiworkflow.load(config.part)
+local trainset, valset, classes, class2target = m2caiworkflow.load()
 
-if config.fromscratch then config.ftfactor = 1 end
-local net = vision.models.inceptionv3.loadFinetuning{
-   filename = pathinceptionv3,
-   ftfactor = config.ftfactor,
-   nclasses = #classes
-}
+local net = model.load{filename = pathmodel}
+net:remove()
+net:remove()
+net:remove()
+net:add(nn.GradientReversal(-1*config.ftfactor))
+net:add(nn.SpatialConvolution(2048, #classes, 1, 1))
+net:add(WeldonAggregation(config.k,config.k))
 print(net)
+
 local criterion = nn.CrossEntropyCriterion():float()
 
-local mean, std
-
-local function addTransforms(dataset, mean, std)
+local function addTransforms(dataset, model)
    dataset = dataset:transform(function(sample)
       local spl = lsplit(sample.line,', ')
       sample.path   = spl[1]
@@ -72,9 +71,15 @@ local function addTransforms(dataset, mean, std)
       sample.label  = classes[spl[2] + 1]
       sample.input  = tnt.transform.compose{
          function(path) return image.load(path, 3) end,
-         vision.image.transformimage.randomScale{minSize=299,maxSize=330},
-         vision.image.transformimage.randomCrop(299),
-         vision.image.transformimage.colorNormalize(mean, std) -- mean not set
+         vision.image.transformimage.randomScale{
+            minSize = config.loadsize,
+            maxSize = config.loadsize+15
+         },
+         vision.image.transformimage.randomCrop(config.loadsize),
+         vision.image.transformimage.colorNormalize{
+            mean = model.mean,
+            std  = model.std
+         }
       }(sample.path)
       return sample
    end)
@@ -82,27 +87,10 @@ local function addTransforms(dataset, mean, std)
 end
 
 trainset = trainset:shuffle()
-trainset = addTransforms(trainset, mean, std)
+trainset = addTransforms(trainset, model)
 function trainset:manualSeed(seed) torch.manualSeed(seed) end
--- valset  = valset:shuffle(300)
-valset  = addTransforms(valset, mean, std)
-
-if config.fromscratch then
-   net:reset()
-   if paths.filep(pathmean) and paths.filep(pathstd) then
-      mean = torch.load(pathmean)
-      std  = torch.load(pathstd)
-   else
-      mean = torch.zeros(3,299,299)
-      std = torch.zeros(3,299,299)
-      mean, std = utils.processMeanStd(trainset, .1, mean, std)
-      torch.save(pathmean, mean)
-      torch.save(pathstd, std)
-   end
-else
-   mean = vision.models.inceptionv3.mean
-   std  = vision.models.inceptionv3.std
-end
+--valset  = valset:shuffle(300)
+valset  = addTransforms(valset, model)
 
 os.execute('mkdir -p '..pathlog)
 os.execute('mkdir -p '..pathdataset)

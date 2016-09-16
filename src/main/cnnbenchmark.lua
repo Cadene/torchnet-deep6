@@ -5,34 +5,37 @@ require 'cudnn'
 vision = require 'torchnet-vision'
 
 local nets = {}
-nets[#nets+1] = vision.models.overfeat.load('models/overfeat/net.t7')
-nets[#nets+1] = vision.models.vgg16.load('models/vgg16/net.t7')
-nets[#nets+1] = vision.models.inceptionv3.load('models/inceptionv3/net.t7')
+-- nets[#nets+1] = vision.models.overfeat.load('models/raw/overfeat/net.t7')
+-- nets[#nets+1] = vision.models.vgg16.load('models/raw/vgg16/net.t7')
+-- nets[#nets+1] = vision.models.inceptionv3.load('models/raw/inceptionv3/net.t7')
+nets[#nets+1] = vision.models.resnet.load('models/raw/resnet200/net.t7')
 
 local nets_name = {}
-nets_name[#nets_name+1] = 'Overfeat'
-nets_name[#nets_name+1] = 'Vgg16'
-nets_name[#nets_name+1] = 'InceptionV3'
+-- nets_name[#nets_name+1] = 'Overfeat'
+-- nets_name[#nets_name+1] = 'Vgg16'
+-- nets_name[#nets_name+1] = 'InceptionV3'
+nets_name[#nets_name+1] = 'Resnet200'
 
 local nets_size = {}
 nets_size[#nets_size+1] = 224
 nets_size[#nets_size+1] = 221
 nets_size[#nets_size+1] = 299
+nets_size[#nets_size+1] = 244
 
 local libs = {}
 libs[#libs+1] = nn
--- libs[#libs+1] = nn
--- libs[#libs+1] = cudnn
+libs[#libs+1] = nn
+libs[#libs+1] = cudnn
 
 local libs_name = {}
 libs_name[#libs_name+1] = 'nn float'
--- libs_name[#libs_name+1] = 'nn cuda'
--- libs_name[#libs_name+1] = 'cudnn'
+libs_name[#libs_name+1] = 'nn cuda'
+libs_name[#libs_name+1] = 'cudnn'
 
 local libs_GPU = {}
 libs_GPU[#libs_GPU+1] = false
--- libs_GPU[#libs_GPU+1] = true
--- libs_GPU[#libs_GPU+1] = true
+libs_GPU[#libs_GPU+1] = true
+libs_GPU[#libs_GPU+1] = true
 
 steps = 10 -- nb of steps in loop to average perf
 

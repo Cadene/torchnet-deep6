@@ -14,12 +14,13 @@ local m2caiworkflow  = require 'src.data.m2caiworkflow'
 local lsplit         = string.split
 
 local cmd = torch.CmdLine()
+-- options to get acctop1=79.25 in 4 epoch
 cmd:option('-seed', 1337, 'seed for cpu and gpu')
 cmd:option('-usegpu', true, 'use gpu')
-cmd:option('-bsize', 15, 'batch size')
-cmd:option('-nepoch', 50, 'epoch number')
-cmd:option('-lr', 1e-4, 'learning rate for adam')
-cmd:option('-lrd', 0, 'learning rate decay')
+cmd:option('-bsize', 13, 'batch size')
+cmd:option('-nepoch', 20, 'epoch number')
+cmd:option('-lr', 5e-5, 'learning rate for adam')
+cmd:option('-lrd', 0.01, 'learning rate decay')
 cmd:option('-ftfactor', 10, 'fine tuning factor')
 cmd:option('-nthread', 3, 'threads number for parallel iterator')
 local config = cmd:parse(arg)
