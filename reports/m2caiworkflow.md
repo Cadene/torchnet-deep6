@@ -212,19 +212,19 @@ Dans le même ordre qu'au dessus :
 - Images en train : 59707
 - Images en val : 7848
 
-Tableau de résultats pour logs/m2caiworkflow/finetuning_partfold_4
-
-| lr | lrd | bsize | epoch | acctop1 |
-|----|-----|-------|-------|---------|
-| 0.0001 | 0.1 | 19 | 5 | 73.802242609582 |
-| 0.0001 | 0.05 | 19 | 5 | 73.942405708461 |
-| 0.0001 | 0.05 | 19 | 3 | 74.490316004077 |
-
-Dans le même ordre qu'au dessus :
-
+Tableau de résultats pour logs/m2caiworkflow/finetuning_partfold_4  
+    
+| lr | lrd | bsize | epoch | acctop1 |  
+|----|-----|-------|-------|---------|  
+| 0.0001 | 0.05 | 19 | 15 | 75.586136595311 |   
+| 0.0001 | 0.05 | 19 | 19 | 76.873088685015 |   
+| 0.0001 | 0.1 | 19 | 17 | 76.898572884811 |    
+    
+Dans le même ordre qu'au dessus :   
+    
+- logs/m2caiworkflow/finetuning_partfold_4/16_09_16_10:37:36/net.t7 
+- logs/m2caiworkflow/finetuning_partfold_4/16_09_16_10:38:19/net.t7 
 - logs/m2caiworkflow/finetuning_partfold_4/16_09_16_10:37:56/net.t7
-- logs/m2caiworkflow/finetuning_partfold_4/16_09_16_10:37:36/net.t7
-- logs/m2caiworkflow/finetuning_partfold_4/16_09_16_10:38:19/net.t7
 
 # InceptionV3 Fold5
 
@@ -232,18 +232,34 @@ Dans le même ordre qu'au dessus :
 - Images en train : 57240
 - Images en val : 10315
 
-Tableau de résultats pour logs/m2caiworkflow/finetuning_partfold_5
-
-| lr | lrd | bsize | epoch | acctop1 |
-|----|-----|-------|-------|---------|
-| 0.0001 | 0.1 | 19 | 5 | 70.809500727096 |
-
-Dans le même ordre qu'au dessus :
-
-- logs/m2caiworkflow/finetuning_partfold_5/16_09_16_10:40:14/net.t7		
+Tableau de résultats pour logs/m2caiworkflow/finetuning_partfold_5  
+    
+| lr | lrd | bsize | epoch | acctop1 |  
+|----|-----|-------|-------|---------|  
+| 0.0001 | 0.1 | 19 | 16 | 74.163839069317 |    
+| 0.0001 | 0.05 | 19 | 12 | 74.280174503151 |   
+    
+Dans le même ordre qu'au dessus :   
+    
+- logs/m2caiworkflow/finetuning_partfold_5/16_09_16_10:40:14/net.t7 
+- logs/m2caiworkflow/finetuning_partfold_5/16_09_16_19:42:36/net.t7	
 
 # InceptionV3 Fold6
 
 - Classes en val : [23,24,25,26,27]
 - Images en train : 54170
 - Images en val : 13385
+
+Tableau de résultats pour logs/m2caiworkflow/finetuning_partfold_6
+    
+| lr | lrd | bsize | epoch | acctop1 |  
+|----|-----|-------|-------|---------|  
+| 0.0001 | 0.1 | 19 | 10 | 65.057900635039 |    
+| 0.0001 | 0.04 | 19 | 10 | 65.69293985805 |    
+| 0.0001 | 0.02 | 19 | 14 | 66.574523720583 |   
+    
+Dans le même ordre qu'au dessus :   
+    
+- logs/m2caiworkflow/finetuning_partfold_6//16_09_16_19:35:21/net.t7    
+- logs/m2caiworkflow/finetuning_partfold_6//16_09_16_19:35:01/net.t7    
+- logs/m2caiworkflow/finetuning_partfold_6//16_09_16_19:34:42/net.t7

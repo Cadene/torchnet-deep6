@@ -46,7 +46,7 @@ cmd:option('-pathdir', 'logs/m2caiworkflow/resnet', '')
 local config = cmd:parse(arg)
 
 local logs = loadLogs(config.pathdir)
---print(logs)
+print(logs)
 print('')
 print('Tableau de résultats pour '..config.pathdir)
 print('')
