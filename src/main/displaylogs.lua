@@ -21,7 +21,7 @@ local function loadLogs(pathdir)
       local pathconfig = pathdir..'/'..pathlog..'/config.t7'
       local pathbestepoch = pathdir..'/'..pathlog..'/bestepoch.t7'
       local config = torch.load(pathconfig)
-      --print(config)
+      print(config)
       print(pathbestepoch)
       if paths.filep(pathbestepoch) then
          local bestepoch = torch.load(pathbestepoch)
