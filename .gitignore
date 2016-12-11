@@ -6,6 +6,7 @@ data/raw/*
 data/processed/*
 data/features/*
 data/interim/*
+data/*
 # Exclude models
 models/raw/*
 models/processed/*
