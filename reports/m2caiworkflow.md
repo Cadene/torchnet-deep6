@@ -124,6 +124,26 @@ Dans le même ordre qu'au dessus :
 - logs/m2caiworkflow/finetuning_part5/16_09_14_11:57:27/net.t7
 - logs/m2caiworkflow/finetuning_part5/16_09_14_11:57:25/net.t7
 
+# InceptionV3 Fold6b (reste à faire)
+
+Tableau de résultats pour logs/m2caiworkflow/finetuning_part6b  
+    
+| lr | lrd | bsize | epoch | acctop1 |  
+|----|-----|-------|-------|---------|  
+| 0.0001 | 0.3 | 19 | 8 | 66.545718432511 | 
+| 0.0001 | 0.1 | 19 | 6 | 69.835510401548 | 
+| 0.0001 | 0 | 18 | 17 | 74.06063538139 |   
+| 0.0001 | 0.06 | 19 | 20 | 74.705692630221 |   
+| 0.0001 | 0.03 | 19 | 20 | 74.858893726818 |   
+    
+Dans le même ordre qu'au dessus :   
+    
+- logs/m2caiworkflow/finetuning_part6b/16_09_14_16:19:39/net.t7 
+- logs/m2caiworkflow/finetuning_part6b/16_09_14_16:20:32/net.t7 
+- logs/m2caiworkflow/finetuning_part6b/16_09_14_16:17:37/net.t7 
+- logs/m2caiworkflow/finetuning_part6b/16_09_14_16:21:08/net.t7 
+- logs/m2caiworkflow/finetuning_part6b/16_09_14_16:21:56/net.t7 
+
 # InceptionV3 Fold0
 
 - Classes en val : 1,2,3

@@ -4,64 +4,56 @@ require 'image'
 require 'os'
 require 'optim'
 ffi = require 'ffi'
-unistd = require 'posix.unistd'
-local lsplit    = string.split
 local logtext   = require 'torchnet.log.view.text'
 local logstatus = require 'torchnet.log.view.status'
-local transformimage =
-   require 'torchnet-vision.image.transformimage'
-local m2caiworkflow = require 'src.data.m2caiworkflow'
+local transformimage = require 'torchnet-vision.image.transformimage'
+local upmcfood101 = require 'torchnet-vision.datasets.upmcfood101'
 
 local cmd = torch.CmdLine()
 cmd:option('-seed', 1337, 'seed for cpu and gpu')
 cmd:option('-usegpu', true, 'use gpu')
-cmd:option('-bsize', 7, 'batch size')
+cmd:option('-bsize', 25, 'batch size')
 cmd:option('-nthread', 3, 'threads number for parallel iterator')
-cmd:option('-pathnet','logs/m2caiworkflow/finetuning_part2/16_09_13_08:35:55/net.t7')
-cmd:option('-pathextract', '/local/robert/m2cai/workflow/extract/inceptionv3_2/16_09_13_08:35:55')
-cmd:option('-part', '2', '')
-cmd:option('-model', 'inceptionv3', '')
+cmd:option('-model', 'vgg16', 'options: vgg16 | vggm | resnet200 | inceptionv3')
+cmd:option('-layerid', 37, 'ex: vgg16 + 37 = 2nd FC layer after ReLU ')
 local config = cmd:parse(arg)
 print(string.format('running on %s', config.usegpu and 'GPU' or 'CPU'))
 
 config.idGPU = os.getenv('CUDA_VISIBLE_DEVICES') or -1
-config.pid   = unilocal tnt = require 'torchnet'
 config.date  = os.date("%y_%m_%d_%X")
 
 torch.setdefaulttensortype('torch.FloatTensor')
 torch.manualSeed(config.seed)
 
-local path = '/net/big/cadene/doc/Deep6Framework2'
-local pathdataset  = path..'/data/processed/m2caiworkflow'
-local pathtrainset = pathdataset..'/trainset.t7'
-local pathvalset   = pathdataset..'/valset.t7'
-local pathtestset  = pathdataset..'/testset.t7'
-local pathnet = config.pathnet
+local pathdataset  = paths.concat('data/processed/upmcfood101')
+local pathtrainset = paths.concat(pathdataset,'trainset.t7')
+local pathtestset  = paths.concat(pathdataset,'testset.t7')
+local pathdata     = paths.concat('/local/cadene/data/raw/upmcfood101')
+local pathmodel    = paths.concat('/local/cadene/models/raw',config.model,'net.t7')
+local pathextract  = paths.concat('/local/cadene/features/upmcfood101',config.date)
+local pathconfig   = paths.concat(pathextract,'config.t7')
 
-require 'cunn'
-require 'cudnn'
-local net = torch.load(pathnet)
+local model = vision.models[config.model]
+local net = model.loadExtracting{
+   filename = pathmodel,
+   layerid  = config.layerid
+}
 print(net)
 local criterion = nn.CrossEntropyCriterion():float()
 
-local trainset, valset, classes, class2target = m2caiworkflow.load(config.part)
-local testset = m2caiworkflow.loadTestset()
+local trainset, testset, classes, class2target = upmcfood101.load()
 -- testset  = testset:shuffle(300)
--- valset   = valset:shuffle(300)
 -- trainset = trainset:shuffle(300)
+print(classes)
+print(class2target)
+do return end
 
 local function addTransforms(dataset, model)
    dataset = dataset:transform(function(sample)
-      local spl = lsplit(sample.line,', ')
-      sample.path   = spl[1]
-      sample.target = spl[2] + 1
-      sample.label  = classes[spl[2] + 1]
       sample.input  = tnt.transform.compose{
          function(path) return image.load(path, 3) end,
-         vision.image.transformimage.randomScale{
-            minSize = model.inputSize[2],
-            maxSize = model.inputSize[2] + 31},
-         vision.image.transformimage.randomCrop(model.inputSize[2]),
+         vision.image.transformimage.scale(model.inputSize[2]),
+         vision.image.transformimage.centerCrop(model.inputSize[2]),
          vision.image.transformimage.colorNormalize{
             mean = model.mean,
             std  = model.std
@@ -71,21 +63,17 @@ local function addTransforms(dataset, model)
    end)
    return dataset
 end
-
-local model = vision.models[config.model]
 testset  = addTransforms(testset, model)
-valset   = addTransforms(valset, model)
 trainset = addTransforms(trainset, model)
 function trainset:manualSeed(seed) torch.manualSeed(seed) end
 
 os.execute('mkdir -p '..pathdataset)
-os.execute('mkdir -p '..config.pathextract)
+os.execute('mkdir -p '..pathextract)
+torch.save(pathconfig, config)
 torch.save(pathtrainset, trainset)
-torch.save(pathvalset, valset)
 torch.save(pathtestset, testset)
 
 local function getIterator(mode)
-   -- mode = {train,val,test}
    local iterator = tnt.ParallelDatasetIterator{
       nthread   = config.nthread,
       init      = function()
@@ -120,23 +108,22 @@ engine.hooks.onStart = function(state)
    nbatch = state.iterator:execSingle("size")
    for _,m in pairs(meter) do m:reset() end
    print(engine.mode)
-   file = assert(io.open(config.pathextract..'/'..engine.mode..'set.csv', "w"))
+   file = assert(io.open(pathextract..'/'..engine.mode..'set.csv', "w"))
    file:write('path;gttarget;gtclass')
    for i=1, #classes do file:write(';pred'..i) end
    file:write("\n")
 end
 engine.hooks.onForward = function(state)
    local output = state.network.output
-   print('Mode', engine.mode)
-   print('inputid', count..' / '..nbatch)
-   print('#input',state.sample.input:size(1))
-   print('#output',output:size(1))
-   print('#target',state.sample.target:size(1))
-   print('#path',#state.sample.path)
+   print('Mode: '..engine.mode,
+         'Inputid: '..count..' / '..nbatch,
+         'Size: '..state.sample.input:size(1)
+            ..' '..output:size(1)
+            ..' '..state.sample.target:size(1)
+            ..' '..#state.sample.path)
    count = count + 1
    if state.sample.input:size(1) == output:size(1) then -- hotfix
       for i=1, output:size(1) do
-         -- print(state.sample.path[i])
          file:write(state.sample.path[i]);
          if engine.mode ~= 'test' then
             file:write(';')
@@ -178,14 +165,6 @@ engine.mode = 'train'
 engine:test{
    network   = net,
    iterator  = getIterator('train'),
-   criterion = criterion
-}
-
-print('Extracting valset ...')
-engine.mode = 'val'
-engine:test{
-   network   = net,
-   iterator  = getIterator('val'),
    criterion = criterion
 }
 

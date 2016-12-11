@@ -15,11 +15,10 @@ local m2caiworkflow = require 'src.data.m2caiworkflow'
 local cmd = torch.CmdLine()
 cmd:option('-seed', 1337, 'seed for cpu and gpu')
 cmd:option('-usegpu', true, 'use gpu')
-cmd:option('-bsize', 7, 'batch size')
+cmd:option('-bsize', 30, 'batch size')
 cmd:option('-nthread', 3, 'threads number for parallel iterator')
-cmd:option('-pathnet','logs/m2caiworkflow/finetuning_part2/16_09_13_08:35:55/net.t7')
-cmd:option('-pathextract', '/local/robert/m2cai/workflow/extract/inceptionv3_2/16_09_13_08:35:55')
-cmd:option('-part', '2', '')
+cmd:option('-pathnet','logs/m2caiworkflow/finetuning_train/16_09_18_02:18:56/net_epoch,13.t7')
+cmd:option('-pathextract', '/local/robert/m2cai/workflow/extract/finetuning_train/16_09_18_02:18:56_epoch,13')
 cmd:option('-model', 'inceptionv3', '')
 local config = cmd:parse(arg)
 print(string.format('running on %s', config.usegpu and 'GPU' or 'CPU'))
@@ -34,7 +33,6 @@ torch.manualSeed(config.seed)
 local path = '/net/big/cadene/doc/Deep6Framework2'
 local pathdataset  = path..'/data/processed/m2caiworkflow'
 local pathtrainset = pathdataset..'/trainset.t7'
-local pathvalset   = pathdataset..'/valset.t7'
 local pathtestset  = pathdataset..'/testset.t7'
 local pathnet = config.pathnet
 
@@ -44,7 +42,7 @@ local net = torch.load(pathnet)
 print(net)
 local criterion = nn.CrossEntropyCriterion():float()
 
-local trainset, valset, classes, class2target = m2caiworkflow.load(config.part)
+local trainset, classes, class2target = m2caiworkflow.loadTrainset()
 local testset = m2caiworkflow.loadTestset()
 -- testset  = testset:shuffle(300)
 -- valset   = valset:shuffle(300)
@@ -74,14 +72,12 @@ end
 
 local model = vision.models[config.model]
 testset  = addTransforms(testset, model)
-valset   = addTransforms(valset, model)
 trainset = addTransforms(trainset, model)
 function trainset:manualSeed(seed) torch.manualSeed(seed) end
 
 os.execute('mkdir -p '..pathdataset)
 os.execute('mkdir -p '..config.pathextract)
 torch.save(pathtrainset, trainset)
-torch.save(pathvalset, valset)
 torch.save(pathtestset, testset)
 
 local function getIterator(mode)
@@ -178,14 +174,6 @@ engine.mode = 'train'
 engine:test{
    network   = net,
    iterator  = getIterator('train'),
-   criterion = criterion
-}
-
-print('Extracting valset ...')
-engine.mode = 'val'
-engine:test{
-   network   = net,
-   iterator  = getIterator('val'),
    criterion = criterion
 }
 

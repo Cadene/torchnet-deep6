@@ -17,17 +17,18 @@ local cmd = torch.CmdLine()
 -- options to get acctop1=79.25 in 4 epoch
 cmd:option('-seed', 1337, 'seed for cpu and gpu')
 cmd:option('-usegpu', true, 'use gpu')
-cmd:option('-bsize', 13, 'batch size')
+cmd:option('-bsize', 7, 'batch size')
 cmd:option('-nepoch', 20, 'epoch number')
-cmd:option('-lr', 5e-5, 'learning rate for adam')
-cmd:option('-lrd', 0.01, 'learning rate decay')
+cmd:option('-lr', 4e-5, 'learning rate for adam')
+cmd:option('-lrd', 0.05, 'learning rate decay')
 cmd:option('-ftfactor', 10, 'fine tuning factor')
 cmd:option('-nthread', 3, 'threads number for parallel iterator')
+cmd:option('-part', 'fold_1', 'data part split')
 local config = cmd:parse(arg)
 print(string.format('running on %s', config.usegpu and 'GPU' or 'CPU'))
 
 config.idGPU = os.getenv('CUDA_VISIBLE_DEVICES') or -1
-config.pid   = unilocal tnt = require 'torchnet'
+config.pid   = unistd.getpid()
 config.date  = os.date("%y_%m_%d_%X")
 
 torch.setdefaulttensortype('torch.FloatTensor')
@@ -36,7 +37,7 @@ torch.manualSeed(config.seed)
 local path = '/net/big/cadene/doc/Deep6Framework2'
 local pathmodel   = path..'/models/raw/resnet/net.t7'
 local pathdataset = path..'/data/processed/m2caiworkflow'
-local pathlog     = path..'/logs/m2caiworkflow/resnet/'..config.date
+local pathlog = path..'/logs/m2caiworkflow/resnet_part'..config.part..'/'..config.date
 local pathtrainset     = pathdataset..'/trainset.t7'
 local pathvalset       = pathdataset..'/valset.t7'
 local pathclasses      = pathdataset..'/classes.t7'
@@ -47,7 +48,7 @@ local pathbestepoch = pathlog..'/bestepoch.t7'
 local pathbestnet   = pathlog..'/net.t7'
 local pathconfig    = pathlog..'/config.t7'
 
-local trainset, valset, classes, class2target = m2caiworkflow.load()
+local trainset, valset, classes, class2target = m2caiworkflow.load(config.part)
 
 require 'cudnn'
 local net = model.load{

@@ -17,9 +17,9 @@ m2caiworkflow.load  = argcheck{
    {name='part', type='string', default='1'},
    call =
    function(part)
-      local pathimages   = '/local/robert/m2cai/workflow/images'
-      local pathtraintxt = '/local/robert/m2cai/workflow/dataset2/trainset_'..part..'.txt'
-      local pathvaltxt   = '/local/robert/m2cai/workflow/dataset2/valset_'..part..'.txt'
+      local pathimages   = '/net/titan/robert/m2cai/workflow/images'
+      local pathtraintxt = '/net/titan/robert/m2cai/workflow/dataset2/trainset_'..part..'.txt'
+      local pathvaltxt   = '/net/titan/robert/m2cai/workflow/dataset2/valset_'..part..'.txt'
       local trainset = tnt.ListDataset{
           filename = pathtraintxt,
           path = pathimages,
@@ -45,6 +45,26 @@ m2caiworkflow.load  = argcheck{
       return trainset, valset, classes, class2target
    end
 }
+
+m2caiworkflow.loadTrainset = function()
+   local pathimages   = '/local/robert/m2cai/workflow/images'
+   local pathtraintxt  = '/local/robert/m2cai/workflow/dataset2/trainset.txt'
+   local trainset = tnt.ListDataset{
+       filename = pathtraintxt,
+       path = pathimages,
+       load = function(line)
+          local sample = {line=line}
+          return sample
+       end
+   }
+   local classes = {"TrocarPlacement", "Preparation",
+         "CalotTriangleDissection", "ClippingCutting",
+         "GallbladderDissection", "GallbladderPackaging",
+         "CleaningCoagulation", "GallbladderRetraction"}
+      local class2target = {}
+      for k,v in pairs(classes) do class2target[v] = k end
+   return trainset, classes, class2target
+end
 
 m2caiworkflow.loadTestset = function()
    local pathimages   = '/local/robert/m2cai/workflow/imagesTest'

@@ -18,7 +18,7 @@ cmd:option('-seed', 1337, 'seed for cpu and gpu')
 cmd:option('-usegpu', true, 'use gpu')
 cmd:option('-bsize', 19, 'batch size')
 cmd:option('-nepoch', 20, 'epoch number')
-cmd:option('-lr', 1e-4, 'learning rate for adam')
+cmd:option('-lr', 1, 'learning rate for adam')
 cmd:option('-lrd', 0, 'learning rate decay')
 cmd:option('-ftfactor', 10, 'fine tuning factor')
 cmd:option('-fromscratch', false, 'if true reset net and set ftfactor to 1')
@@ -71,7 +71,7 @@ local function addTransforms(dataset, mean, std)
       sample.target = spl[2] + 1
       sample.label  = classes[spl[2] + 1]
       sample.input  = tnt.transform.compose{
-         function(path) return image.load(path, 3) end,
+         function(path) return image.load(path, 3):float() end,
          vision.image.transformimage.randomScale{minSize=299,maxSize=330},
          vision.image.transformimage.randomCrop(299),
          vision.image.transformimage.colorNormalize(mean, std) -- mean not set
