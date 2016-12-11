@@ -4,37 +4,39 @@ require 'cunn'
 require 'cudnn'
 vision = require 'torchnet-vision'
 
+local batchSize = 20
+
 local nets = {}
 -- nets[#nets+1] = vision.models.overfeat.load('models/raw/overfeat/net.t7')
--- nets[#nets+1] = vision.models.vgg16.load('models/raw/vgg16/net.t7')
+nets[#nets+1] = vision.models.vgg16.load('models/raw/vgg16/net.t7')
 -- nets[#nets+1] = vision.models.inceptionv3.load('models/raw/inceptionv3/net.t7')
-nets[#nets+1] = vision.models.resnet.load('models/raw/resnet200/net.t7')
+-- nets[#nets+1] = vision.models.resnet.load('models/raw/resnet200/net.t7')
 
 local nets_name = {}
 -- nets_name[#nets_name+1] = 'Overfeat'
--- nets_name[#nets_name+1] = 'Vgg16'
+nets_name[#nets_name+1] = 'Vgg16'
 -- nets_name[#nets_name+1] = 'InceptionV3'
-nets_name[#nets_name+1] = 'Resnet200'
+-- nets_name[#nets_name+1] = 'Resnet200'
 
 local nets_size = {}
-nets_size[#nets_size+1] = 224
+-- nets_size[#nets_size+1] = 224
 nets_size[#nets_size+1] = 221
-nets_size[#nets_size+1] = 299
-nets_size[#nets_size+1] = 244
+-- nets_size[#nets_size+1] = 299
+-- nets_size[#nets_size+1] = 224
 
 local libs = {}
-libs[#libs+1] = nn
-libs[#libs+1] = nn
+-- libs[#libs+1] = nn
+-- libs[#libs+1] = nn
 libs[#libs+1] = cudnn
 
 local libs_name = {}
-libs_name[#libs_name+1] = 'nn float'
-libs_name[#libs_name+1] = 'nn cuda'
+-- libs_name[#libs_name+1] = 'nn float'
+-- libs_name[#libs_name+1] = 'nn cuda'
 libs_name[#libs_name+1] = 'cudnn'
 
 local libs_GPU = {}
-libs_GPU[#libs_GPU+1] = false
-libs_GPU[#libs_GPU+1] = true
+-- libs_GPU[#libs_GPU+1] = false
+-- libs_GPU[#libs_GPU+1] = true
 libs_GPU[#libs_GPU+1] = true
 
 steps = 10 -- nb of steps in loop to average perf
@@ -56,7 +58,7 @@ for i=1,#nets do
       collectgarbage()
       local model = nets[i]:float()
       local model_name = nets_name[i]
-      local size = {50, 3, nets_size[i], nets_size[i]}
+      local size = {batchSize, 3, nets_size[i], nets_size[i]}
       local input = makeInput('BDHW',size):float()
       local lib_name = libs_name[j]
 
@@ -67,10 +69,10 @@ for i=1,#nets do
          input=input:cuda()
       end
 
-      print('ModelType: ' .. model_name, 'Implem: ' .. lib_name, 
-            'Input shape: ' .. input:size(1) .. 'x' .. input:size(2) .. 
+      print('ModelType: ' .. model_name, 'Implem: ' .. lib_name,
+            'Input shape: ' .. input:size(1) .. 'x' .. input:size(2) ..
                'x' .. input:size(3) .. 'x' .. input:size(4))
-      
+
       -- dry-run
       model:zeroGradParameters()
       local output = model:updateOutput(input)
@@ -78,7 +80,7 @@ for i=1,#nets do
       model:accGradParameters(input, output)
       if libs_GPU[j] then cutorch.synchronize() end
       collectgarbage()
-      
+
       local tmf, tmbi, tmbg
       sys.tic()
       for t = 1,steps do
@@ -121,4 +123,3 @@ for i=1,#nets do
 end
 
 print('')
-
